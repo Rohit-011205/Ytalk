@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,900;1,400&display=swap');
+
+.font-logo {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.2em;
+}
+
+.font-ancient {
+  font-family: 'Playfair Display', serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+@plugin "daisyui";
+
+* {
+  font-family: "Outfit", sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: #787777 #1e1e1e;
+}
+

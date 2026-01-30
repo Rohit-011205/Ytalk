@@ -1,7 +1,12 @@
 import User from "../Models/user.model.js"
 import Message from "../Models/message.model.js"
+import cloudinary from "../lib/cloudinary.js"
+import { getReceiverSocketId } from "../lib/socket.io.js"
+import { io } from "../lib/socket.io.js"
 
-export const getUserForSidebar = async (requestAnimationFrame, res) => {
+
+export const getUserForSidebar = async (req, res) => {
+
     try {
         const loggedInUserId = req.user._id
         const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password")
@@ -26,7 +31,7 @@ export const getMessages = async (req, res) => {
 
             ],
         })
-        res.status(200).json({ messages })
+        res.status(200).json( messages )
 
 
     } catch (error) {
@@ -57,6 +62,10 @@ export const sendMessage = async (req, res) => {
 
         await newMessage.save();
 
+        const receiverSocketId = getReceiverSocketId(receiverId);
+        if(receiverSocketId) {
+            io.to(receiverSocketId).emit("newMessage", newMessage); 
+        }
 
 
         res.status(201).json(newMessage);

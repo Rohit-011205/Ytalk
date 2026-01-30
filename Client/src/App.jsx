@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
-import { useAuthStore } from './Store/useAuthStore';
+import { useAuthStore } from './Store/useAuthStore.js';
 import { Loader } from 'lucide-react';
 import SignupPage from './Pages/SignupPage';
 import { Toaster } from 'react-hot-toast';
@@ -10,27 +10,36 @@ import ProfilePage from './Pages/ProfilePage';
 import LoginP from './Pages/LoginP';
 // import { useEffect } from 'react';
 import { useThemeStore } from './Store/useThemeStore';
+import NavBar from './Pages/NavBar';
+
+
 
 export default function App() {
-  const { authUser, checkAuth, isCheckingAuth, } = useAuthStore()
+  const { authUser, checkAuth, isCheckingAuth, onlineUsers} = useAuthStore()
   const { theme} = useThemeStore();
+
+  console.log({onlineUsers})
 
   useEffect(() => {
     checkAuth()
 
   }, [checkAuth])
 
-  console.log(authUser)
+  // console.log(authUser)
 
-  if (isCheckingAuth && !authUser) {
-    <div className="hi flex items-center justify-center h-screen">
+ if (isCheckingAuth && !authUser) {
+  return (
+    <div className="flex items-center justify-center h-screen">
       <Loader className="size-10 animate-spin" />
     </div>
-  }
+  );
+}
+
   return (
     <>
       <div data-theme={theme}>
 
+       {/* <NavBar /> */}
 
         <Routes>
           <Route path='/HomePage' element={<HomePage />} />

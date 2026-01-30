@@ -1,25 +1,60 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,900;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,900;1,400&family=Outfit:wght@300;400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@plugin "daisyui";
+
+/* Global Layout Lock */
+html, body, #root {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* This stops the whole page from shaking/scrolling */
+  background-color: #050208;
+  color: #f4f4f5;
+}
+
+* {
+  font-family: "Outfit", sans-serif;
+}
 
 .font-logo {
   font-family: 'Cinzel', serif;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.25em;
 }
 
 .font-ancient {
   font-family: 'Playfair Display', serif;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-
-
-@plugin "daisyui";
-
-* {
-  font-family: "Outfit", sans-serif;
-  scrollbar-width: thin;
-  scrollbar-color: #787777 #1e1e1e;
+/* Custom Stealth Scrollbar for the ChatBox & Sidebar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
 }
 
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.1); /* Subtle Purple */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.3);
+}
+
+/* Shimmer Animation */
+@keyframes subtle-shimmer {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.3; }
+}
+
+.animate-pulse {
+  animation: subtle-shimmer 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

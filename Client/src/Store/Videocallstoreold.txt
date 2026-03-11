@@ -1,0 +1,419 @@
+import { create } from "zustand";
+import { axiosInstance } from "../../API.js";
+import toast from "react-hot-toast";
+import { useAuthStore } from "./useAuthStore.js";
+import axios from "axios";
+import Ringtone from "../../Audio/Ringtone.mp3"
+
+export const useVideoCallStore = create((set, get) => ({
+    incomingCall: null,
+    activeCall: null,
+    isCalling: false,
+    missedCall: [],
+    // missedCalls: [],
+    callHistory: [],
+    isLoadingHistory: false,
+    isLoadingMissed: false,
+
+    startCall: async ({ groupId, receiverId }) => {
+        set({ isCalling: true });
+
+        try {
+            const response = await axiosInstance.post("/videocalls/start", {
+                groupId, receiverId,
+            })
+
+            const { roomId, callId, receiverOnline } = response.data;
+
+            const { socket, authUser } = useAuthStore.getState();
+            // const socket = useAuthStore.getState().socket();
+            // const authUser = useAuthStore.getState().socket();
+
+            set({
+                activeCall: {
+                    roomId,
+                    callId,
+                    type: groupId ? 'group' : '1-on-1',
+                    isInitiator: true,
+                    groupId: groupId || null,
+                    receiverId: receiverId || null,
+                }
+            });
+            
+
+            if (socket && authUser) {
+                socket.emit("joinVideoCall", {
+                    roomId,
+                    userId: authUser._id,
+                })
+                console.log("Joined Video Call Room: ", roomId)
+            }
+
+            if (receiverId && receiverOnline == false) {
+                toast("User is offline");
+            }
+            // set({
+            //     activeCall: {
+            //         roomId,      
+            //         callId,
+            //         type: groupId ? "group" : "1-on-1",
+            //         isInitiator: true,
+            //         groupId: groupId || null,
+            //         receiverId: receiverId || null,
+            //     }
+            // })
+
+
+            toast.success("Call started");
+            return { roomId, callId };
+        } catch (error) {
+            console.log("Error in StartCall", error)
+            // console.log("Error in StartCall", error.response?.data?.message)
+        }
+        finally {
+            set({ isCalling: false })
+        }
+    },
+
+
+    acceptCall: async (callData) => {
+
+        const { incomingCall } = get();
+
+        try {
+            console.log("Accepting Call", callData.callId)
+
+            if (incomingCall?.ringtone) {
+                incomingCall.ringtone.pause();
+                incomingCall.ringtone.currentTime = 0;
+            }
+
+            const response = await axiosInstance.post(`/videocalls/answer/${callData.callId}`)
+            const roomId = callData.roomId || response.data.roomId
+
+            // const socket = useAuthStore.getState().socket();
+            // const authUser = useAuthStore.getState().socket();
+            const { socket, authUser } = useAuthStore.getState();
+
+
+            if (socket && authUser) {
+                socket.emit("joinVideoCall", {
+                     roomId: callData.roomId,
+                    userId: authUser._id,
+                })
+                console.log("Joined Video Call Room: ", roomId)
+            }
+
+            set({
+                activeCall: {
+                    roomId: callData.roomId || response.data.roomId,
+                    callId: callData.callId,
+                    type: callData.type,
+                    isInitiator: false,
+                },
+                incomingCall: null,
+            })
+
+            toast.success("Call accepted");
+            return { roomId: callData.roomId || response.data.roomId };
+        } catch (error) {
+            console.log("Error in the Accept Call store", error.message)
+            toast.error("Failed to join call");
+            throw error;
+        }
+    },
+
+    rejectCall: async (callData) => {
+        const { incomingCall } = get();
+
+        try {
+            console.log("Rejecting Call", callData.callId);
+
+            if (incomingCall?.ringtone) {
+                incomingCall.ringtone.pause();
+                incomingCall.ringtone.currentTime = 0;
+            }
+
+            const response = await axiosInstance.post(`/videocalls/reject/${callData.callId}`)
+
+            set({
+                incomingCall: null,
+            })
+
+            toast("Call rejected")
+
+        } catch (error) {
+            console.log("Error in rejecting Call", error.message)
+            toast.error("Failed to Reject call")
+            set({ incomingCall: null });
+        }
+    },
+
+    endCall: async (roomId) => {
+        const { activeCall } = get();
+
+        if (!roomId && activeCall) {
+            roomId = activeCall.roomId;
+        }
+
+        if (!roomId) {
+            console.log("There is No room")
+        }
+
+        try {
+            console.log("Ending Call");
+
+            await axiosInstance.post(`/videocalls/end/${roomId}`)
+
+            // const socket = useAuthStore.getState().socket;
+            // const authUser = useAuthStore.getState().authUser;
+            const { socket, authUser } = useAuthStore.getState();
+
+
+            if (socket && authUser) {
+                socket.emit("leaveVideoCall", {
+                    roomId,
+                    userId: authUser._id
+                });
+                console.log(" Left video call room:", roomId);
+            }
+
+            set({
+                activeCall: null,
+                incomingCall: null,
+            })
+
+            toast.success("Call Ended")
+        } catch (error) {
+            console.log("Error in ending call", error.message);
+            toast.error("Failed to end call")
+            set({ activeCall: null, incomingCall: null });
+        }
+    },
+
+    leaveCall: async (roomId) => {
+        const { activeCall } = get();
+
+        if (!roomId && activeCall) {
+            roomId = activeCall.roomId;
+        }
+
+        if (!roomId) {
+            console.error("No roomId to leave call");
+            return;
+        }
+
+        try {
+            console.log("Leaving call:", roomId);
+
+            await axiosInstance.post(`/videocalls/leave/${roomId}`);
+
+            // const socket = useAuthStore.getState().socket;
+            // const authUser = useAuthStore.getState().authUser;
+            const { socket, authUser } = useAuthStore.getState();
+
+
+            if (socket && authUser) {
+                socket.emit("leaveVideoCall", {
+                    roomId,
+                    userId: authUser._id
+                });
+                console.log("Left video call room:", roomId);
+            }
+
+            set({ activeCall: null });
+
+            toast.success("Left call");
+
+        } catch (error) {
+            console.error("Error in leaving Call", error);
+            toast.error("Failed to leave call");
+        }
+    },
+
+    setIncomingCall: (callData) => {
+        console.log("Receving the incoming call");
+
+        const { activeCall } = get();
+
+        if (activeCall) {
+            console.log("Alredy in the call");
+
+            get().rejectCall(callData);
+            return;
+        }
+
+        let ringtone = null
+
+        try {
+            ringtone = new Audio(Ringtone);
+            ringtone.loop = true
+            ringtone.volume = 0.5
+
+            const playPromise = ringtone.play();
+            if (playPromise != undefined) {
+                playPromise.catch((error) => {
+                    console.log("Error in  Ringtone playing")
+                })
+            }
+        } catch (error) {
+            console.log("Error in the creating setCalll")
+        }
+
+        set({
+            incomingCall: {
+                ...callData,
+                ringtone,
+                timestamp: Date.now(),
+            },
+        })
+
+        setTimeout(() => {
+            const currentIncoming = get().incomingCall;
+            if (currentIncoming && currentIncoming.callId === callData.callId) {
+                console.log("Call timeout - auto-rejecting");
+                get().rejectCall(callData);
+            }
+        }, 30000);
+    },
+
+    clearIncomingCall: () => {
+        const { incomingCall } = get();
+
+        if (incomingCall?.ringtone) {
+            incomingCall.ringtone.pause();
+            incomingCall.ringtone.currentTime = 0;
+        }
+
+        set({ incomingCall: null });
+    },
+
+    // clearIncomingCall: () => {
+    //     const { incomingCall } = get();
+
+    //     if (incomingCall?.ringtone) {
+    //         incomingCall.ringtone.pause();
+    //         incomingCall.ringtone.currentTime = 0;
+    //     }
+
+    //     set({ incomingCall: null })
+    // },
+
+    fetchMissedCall: async () => {
+        set({ isLoadingMissed: true });
+
+        try {
+            const response = await axiosInstance.get("/videocalls/missed");
+
+            console.log("Fetching Missed Call", response.data.length || 0);
+
+            set({
+                missedCall: response.data.calls || []
+            })
+        } catch (error) {
+            console.log("Error in getting MissedCall Data");
+            toast.error("Failed to Load Missed Call")
+        }
+        finally {
+            set({ isLoadingHistory: false })
+        }
+    },
+
+    fetchCallHistory: async (page = 1, limit = 20) => {
+        set({ isLoadingHistory: true });
+
+        try {
+            const response = await axiosInstance.get("/videocalls/history", {
+                params: { page, limit },
+            })
+
+            console.log("📜 Fetched call history:", response.data.calls.length);
+
+            set({ callHistory: response.data.calls });
+
+            return response.data.pagination;
+        } catch (error) {
+            console.log("Error in getting CallHistory Data");
+            toast.error("Failed to Load Missed Call")
+        }
+        finally {
+            set({ isLoadingHistory: false });
+        }
+    },
+
+    fetchActiveCalls: async () => {
+        try {
+            const response = await axiosInstance.get("/videocalls/active");
+
+            console.log("Active calls:", response.data.length);
+
+            return response.data;
+
+        } catch (error) {
+            console.error("Failed to fetch active calls:", error);
+            return [];
+        }
+    },
+
+    getCallDetails: async (roomId) => {
+        try {
+            const response = await axiosInstance.get(`/videocalls/details/${roomId}`);
+
+            console.log("Call details:", response.data);
+
+            return response.data;
+
+        } catch (error) {
+            console.error(" Failed to fetch call details:", error);
+            throw error;
+        }
+    },
+
+    handleCallEnded: (roomId) => {
+        const { activeCall } = get();
+
+        console.log(" Call ended event received:", roomId);
+
+        if (activeCall?.roomId === roomId) {
+            set({ activeCall: null });
+            toast("Call ended");
+        }
+
+        const { incomingCall } = get();
+        if (incomingCall?.roomId === roomId) {
+            get().clearIncomingCall();
+        }
+    },
+
+    handleNewMissedCall: (missedCall) => {
+        console.log("New missed call:", missedCall);
+
+        set((state) => ({
+            missedCall: [missedCall, ...state.missedCall],
+        }));
+
+        toast.error(`Missed call from ${missedCall.callerId?.Fullname || "Unknown"}`, {
+            duration: 5000,
+        });
+    },
+
+    resetStore: () => {
+        const { incomingCall } = get();
+
+        if (incomingCall?.ringtone) {
+            incomingCall.ringtone.pause();
+        }
+
+        set({
+            incomingCall: null,
+            activeCall: null,
+            isCalling: false,
+            missedCall: [],
+            callHistory: [],
+            isLoadingHistory: false,
+            isLoadingMissed: false,
+        });
+
+        console.log(" Video call store reset");
+    },
+}))

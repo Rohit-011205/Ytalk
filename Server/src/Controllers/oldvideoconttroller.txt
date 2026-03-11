@@ -1,0 +1,504 @@
+// import videoCallManager from "../lib/videoCallManager.js";
+// import Group from "../Models/group.model.js";
+// import { io } from "../lib/socket.io.js";
+// import { v4 as uuidv4 } from "uuid";
+// import MissedCall from "../Models/missedCall.model.js";
+// import VideoCall from "../Models/video-call.model.js"
+// import { getReceiverSocketId } from "../lib/socket.io.js";
+// import User from "../Models/user.model.js";
+
+// const notifyMissedCall = async (userId, missedCall) => {
+//     const socketIds = getReceiverSocketId(userId.toString());
+//     socketIds.forEach(socketId => {
+//         io.to(socketId).emit("missedCall", missedCall);
+//     });
+// };
+
+
+// export const startCall = async (req, res) => {
+//     try {
+//         const { groupId, receiverId } = req.body;
+//         const createdBy = req.user._id;
+
+//         //    if(!groupId){
+//         //     return res.status(404).json({
+//         //         message:'Group Not found'
+//         //     })
+//         //    }
+
+//         if (!groupId && !receiverId) {
+//             return res.status(400).json({ message: "Must specify either groupId or receiverId" });
+//         }
+
+//         if (groupId && receiverId) {
+//             return res.status(400).json({
+//                 message: "Cannot specify both groupId and receiverId"
+//             });
+//         }
+
+//         if (groupId) {
+//             const group = await Group.findById(groupId);
+//             if (!group) {
+//                 return res.status(404).json({ message: 'Group not found' });
+//             }
+
+//             const isMember = group.members.some(m => m.toString() === createdBy.toString())
+//             if (!isMember) {
+//                 return res.status(404).json({ message: 'Only valid memebers' });
+//             }
+//         }
+
+//         const roomId = uuidv4();
+
+//         const videoCall = new VideoCall({
+//             roomId,
+//             groupId: groupId || null,
+//             receiverId: receiverId || null,
+//             participants: [{
+//                 userId: createdBy,
+//                 hasVideo: false,
+//                 hasAudio: false,
+//                 joinedAt: new Date(),
+//             }],
+//             createdBy,
+//         })
+
+//         await videoCall.save();
+
+//         if (groupId) {
+//             io.to(`group-${groupId}`).emit('incomingCall', {
+//                 roomId,
+//                 callId: videoCall._id,
+//                 from: createdBy,
+//                 type: 'group',
+//             });
+
+
+//         }
+//         else if (receiverId) {
+//             const receiverSocketIds = getReceiverSocketId(receiverId);
+//             const receiverOnline = receiverSocketIds.length > 0;
+
+//             if (receiverOnline) {
+//                 // Receiver is online
+//                 receiverSocketIds.forEach(socketId => {
+//                     io.to(socketId).emit('incomingCall', {
+//                         roomId,
+//                         callId: videoCall._id,
+//                         from: createdBy,
+//                         type: '1-on-1',
+//                         callerName: req.user.Fullname,      // ← ADD THIS
+//                         callerAvatar: req.user.profilePic,
+//                     });
+//                 });
+//             }
+//             // else {
+
+//             //     // OFFLINE → missed call
+//             //     await MissedCall.create({
+//             //         callId: videoCall._id,
+//             //         recipientId: receiverId,
+//             //         callerId: createdBy,
+//             //         type: "1-on-1",
+//             //     });
+
+//             // }
+//         }
+//         // else {
+//         //     await MissedCall.create({
+//         //         callId: videoCall._id,
+//         //         recipientId: receiverId,
+//         //         callerId: createdBy,
+//         //         type: '1-on-1',
+//         //     });
+
+//         //     console.log(` Missed call saved for offline user ${receiverId}`);
+//         // }
+
+
+//         res.status(201).json({ roomId, callId: videoCall._id });
+//     }
+//     catch (error) {
+//         console.error('Error starting call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+// export const getCallHistory = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const { limit = 20, page = 1 } = req.query;
+
+//         const skip = (page - 1) * limit;
+
+//         const calls = await VideoCall.find({
+//             $or: [
+//                 { createdBy: userId },
+//                 { 'participants.userId': userId },
+//             ]
+//         })
+//             .populate('createdBy', 'Fullname profilePic')
+//             .populate('participants.userId', 'Fullname profilePic')
+//             .populate('groupId', 'name profilePic')
+//             .sort({ createdAt: -1 })
+//             .limit(parseInt(limit))
+//             .skip(skip);
+
+//         const total = await VideoCall.countDocuments({
+//             $or: [
+//                 { createdBy: userId },
+//                 { 'participants.userId': userId },
+//             ]
+//         });
+
+//         res.status(200).json({
+//             calls,
+//             pagination: {
+//                 total,
+//                 page: parseInt(page),
+//                 pages: Math.ceil(total / limit),
+//             }
+//         });
+
+//     } catch (error) {
+//         console.error(' Error fetching call history:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// };
+
+// export const endCall = async (req, res) => {
+//     try {
+//         const { roomId } = req.params;
+//         const userId = req.user._id;
+
+//         const call = await VideoCall.findOne({ roomId, status: 'active' })
+//         if (!call) {
+//             return res.status(403).json({ message: 'Active call not found' })
+//         }
+
+//         if (call.groupId) {
+//             const group = await Group.findById(call.groupId);
+//             const isAdmin = group.admins.some(a => a.toString() === userId.toString());
+
+//             if (call.createdBy.toString() !== userId && !isAdmin) {
+//                 return res.status(403).json({
+//                     message: 'Only call creator or group admin can end the call'
+//                 })
+//             }
+//         }
+//         else {
+//             const isParticipant = call.participants.some(
+//                 p => p.userId.toString() === userId.toString()
+//             );
+
+//             if (!isParticipant) {
+//                 return res.status(403).json({ message: 'Not a call participant' });
+//             }
+//         }
+
+//         call.status = 'ended';
+//         call.endedAt = new Date();
+
+//         call.participants = call.participants.map(p => {
+//             if (!p.leftAt) {
+//                 p.leftAt = new Date();
+//             }
+//             return p;
+//         })
+
+//         await call.save();
+
+//         if (call.groupId) {
+//             const group = await Group.findById(call.groupId);
+
+//             const groupMemberIds = group.members.map(m => m.toString());
+
+//             const joinedUserIds = call.participants.map(p => p.userId.toString())
+
+//             const missedUserIds = groupMemberIds.filter(userId =>
+//                 userId !== call.createdBy.toString() &&
+//                 !joinedUserIds.includes(userId)
+//             );
+
+//             for (const missedUserId of missedUserIds) {
+//                 const missedCall = await MissedCall.create({
+//                     callId: call._id,
+//                     recipientId: missedUserId,
+//                     callerId: call.createdBy,
+//                     type: "group",
+//                 });
+//                 await notifyMissedCall(missedUserId, missedCall);
+//             }
+
+//             console.log(
+//                 `Group missed calls created for users:`,
+//                 missedUserIds
+//             );
+//         }
+
+//         io.to(`video-${roomId}`).emit('callEnded', {
+//             roomId,
+//             endedBy: userId
+//         })
+
+//         videoCallManager.deleteRoom(roomId);
+
+//         console.log(`Call ${roomId} ended by ${userId}`);
+
+//         const joinedUserIds = call.participants.map(p => p.userId.toString());
+
+//         if (call.receiverId && !joinedUserIds.includes(call.receiverId.toString())) {
+//             const missedCall = await MissedCall.create({
+//                 callId: call._id,
+//                 recipientId: call.receiverId,
+//                 callerId: call.createdBy,
+//                 type: '1-on-1',
+//             });
+
+//             await notifyMissedCall(call.receiverId, missedCall);
+//         }
+
+//         res.status(200).json({ message: 'Call ended successfully' });
+
+//     } catch (error) {
+//         console.error('Error ending call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+// export const leaveCall = async (req, res) => {
+//     try {
+//         const { roomId } = req.params;
+//         const userId = req.user._id;
+
+//         const call = await VideoCall.findOne({ roomId, status: 'active' });
+//         if (!call) {
+//             return res.status(404).json({ message: 'Active call not found' });
+//         }
+
+//         const participant = call.participants.find(
+//             p => p.userId.toString() === userId.toString()
+//         )
+
+//         if (!participant) {
+//             return res.status(400).json({ message: 'You are not in this call' });
+//         }
+
+//         participant.leftAt = new Date();
+//         await call.save();
+
+//         io.to(`video-${roomId}`).emit("userleftVideoCall", {
+//             userId,
+//             roomId
+//         })
+
+//         videoCallManager.removePeer(roomId, userId.toString());
+
+//         const activeParticipants = call.participants.filter(p => !p.leftAt);
+
+//         if (activeParticipants.length === 0) {
+//             call.status = 'ended';
+//             call.endedAt = new Date();
+//             await call.save();
+
+//             videoCallManager.deleteRoom(roomId);
+//             console.log(`Call ${roomId} ended - all participants left`);
+//         }
+
+//         console.log(` User ${userId} left call ${roomId}`);
+
+//         res.status(200).json({ message: 'Left call successfully' });
+
+//     } catch (error) {
+//         console.error(' Error leaving call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+// export const getCallDetails = async (req, res) => {
+//     try {
+//         const { roomId } = req.params;
+
+//         const call = await VideoCall.findOne({ roomId })
+//             .populate('participants.userId', 'Fullname profilePic email')
+//             .populate('createdBy', 'Fullname profilePic email')
+//             .populate('groupId', 'name profilePic');
+
+//         if (!call) {
+//             return res.status(404).json({ message: 'Call not found' });
+//         }
+
+//         res.status(200).json(call);
+//     } catch (error) {
+//         console.error('Error fetching call details:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+// export const answerCall = async (req, res) => {
+//     try {
+//         const { callId } = req.params;
+//         const userId = req.user._id;
+
+//         const call = await VideoCall.findById(callId);
+//         if (!call) {
+//             return res.status(404).json({ message: 'Call not found' });
+//         }
+
+//         if (call.status === 'ended') {
+//             return res.status(400).json({ message: 'Call has already ended' });
+//         }
+
+//         // Check if already in call
+//         const alreadyInCall = call.participants.some(
+//             p => p.userId.toString() === userId.toString()
+//         );
+
+//         if (!alreadyInCall) {
+//             call.participants.push({
+//                 userId,
+//                 hasVideo: false,
+//                 hasAudio: false,
+//                 joinedAt: new Date(),
+//             });
+//             await call.save();
+//         }
+
+//         // Notify others
+//         io.to(`video-${call.roomId}`).emit('userJoinedVideoCall', {
+//             userId,
+//             callId: call._id,
+//         });
+
+//         res.status(200).json({
+//             roomId: call.roomId,
+//             callId: call._id,
+//             message: 'Joined call successfully'
+//         });
+//     } catch (error) {
+//         console.error(' Error answering call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// };
+
+// export const rejectCall = async (req, res) => {
+//     try {
+//         const { callId } = req.params;
+//         const userId = req.user._id;
+
+//         const call = await VideoCall.findById(callId);
+//         if (!call) {
+//             return res.status(404).json({ message: 'Call not found' });
+//         }
+
+//         // Notify caller
+//         const callerSocketIds = getReceiverSocketId(call.createdBy.toString());
+//         callerSocketIds.forEach(socketId => {
+//             io.to(socketId).emit('callRejected', {
+//                 callId: call._id,
+//                 rejectedBy: userId,
+//             });
+//         });
+
+//         call.status = "ended";
+//         call.endedAt = new Date();
+//         await call.save();
+
+//         const missedCall = await MissedCall.create({
+//             callId: call._id,
+//             recipientId: call.createdBy,
+//             callerId: userId,
+//             type: "1-on-1",
+//         });
+
+//         await notifyMissedCall(call.createdBy, missedCall);
+
+//         console.log(` Call ${callId} rejected by ${userId}`);
+
+//         res.status(200).json({ message: 'Call rejected' });
+
+//     } catch (error) {
+//         console.error(' Error rejecting call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+
+
+// export const getMissedCalls = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         const missedCalls = await MissedCall.find({
+//             recipientId: userId,
+//             viewed: false,
+//         })
+//             .populate('callerId', 'Fullname profilePic email')
+//             .populate({
+//                 path: 'callId',
+//                 populate: {
+//                     path: 'groupId',
+//                     select: 'name profilePic'
+//                 }
+//             })
+//             .sort({ createdAt: -1 });
+
+//         res.status(200).json(missedCalls);
+
+//     } catch (error) {
+//         console.error('Error fetching missed calls:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
+// export const markMissedCallViewed = async (req, res) => {
+//     try {
+//         const { missedCallId } = req.params;
+//         const userId = req.user._id;
+
+//         const missedCall = await MissedCall.findOneAndUpdate(
+//             {
+//                 _id: missedCallId,
+//                 recipientId: userId
+//             },
+//             {
+//                 viewed: true,
+//                 notifiedAt: new Date()
+//             },
+//             { new: true }
+//         );
+
+//         if (!missedCall) {
+//             return res.status(404).json({ message: 'Missed call not found' });
+//         }
+
+//         res.status(200).json(missedCall);
+
+//     } catch (error) {
+//         console.error('Error marking missed call:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// };
+
+// export const getActiveCalls = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         const activeCalls = await VideoCall.find({
+//             status: 'active',
+//             $or: [
+//                 { createdBy: userId },
+//                 { 'participants.userId': userId },
+//             ]
+//         })
+//             .populate('createdBy', 'Fullname profilePic')
+//             .populate('participants.userId', 'Fullname profilePic')
+//             .populate('groupId', 'name profilePic');
+
+//         res.status(200).json(activeCalls);
+
+//     } catch (error) {
+//         console.error(' Error fetching active calls:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// };

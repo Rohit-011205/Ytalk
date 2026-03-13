@@ -1,6 +1,7 @@
 import axios from "axios";
 
+const url = ["https://ytalk-1.onrender.com/api","http://localhost:5000/api"]
 export const axiosInstance = axios.create({
-    baseURL:  "http://localhost:5000/api",
+    baseURL:url,
     withCredentials: true,
 })

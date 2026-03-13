@@ -4,7 +4,8 @@ import { toast } from "react-hot-toast"
 import { io } from "socket.io-client"
 import { useVideoCallStore } from "./useVideoCall.js"
 
-const BASE_URL = "http://localhost:5000";
+const url = ["https://ytalk-1.onrender.com/api","http://localhost:5000/api"];
+const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
 export const useAuthStore = create((set, get) => ({
     authUser: null,

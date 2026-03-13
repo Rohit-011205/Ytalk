@@ -52,146 +52,75 @@
 
 import React from 'react';
 import { useMessageStore } from '../Store/UseMessageStore.js';
-import { X, Video, Phone } from "lucide-react";
-import { useNavigate } from 'react-router-dom';
-import react from "../assets/react.svg";
 import { useAuthStore } from '../Store/useAuthStore.js';
 import { useVideoCallStore } from '../Store/useVideoCall.js';
-import { useState } from 'react';
-import OutgoingCallScreen from './OutgoingCallScreen.jsx';
-
-
-// const ChatHeader = () => {
-//     const { selectedUser, setSelectedUser } = useMessageStore();
-//     if (!selectedUser) return null;
-
-//     return (
-//         <div className="px-6 py-4 bg-[#050208]/80 backdrop-blur-xl border-b border-purple-900/10">
-//             <div className="flex items-center justify-between">
-//                 <div className="flex items-center gap-4">
-//                     <div className="size-10 rounded-full border border-purple-500/20 overflow-hidden bg-zinc-900">
-//                         <img src={selectedUser.profilePic || react} alt="profile" className="w-full h-full object-cover" />
-//                     </div>
-//                     <div>
-//                         <h3 className="text-sm font-semibold text-purple-50">{selectedUser.Fullname}</h3>
-//                         <p className="text-[10px] text-emerald-500 uppercase tracking-widest font-bold">Secure Session</p>
-//                     </div>
-//                 </div>
-//                 <button 
-//                     onClick={() => setSelectedUser(null)}
-//                     className="p-2 hover:bg-white/5 rounded-full text-zinc-500 transition-colors"
-//                 >
-//                     <X size={20} />
-//                 </button>
-//             </div>
-//         </div>
-//     );
-// };
-
-// export default ChatHeader;
+import { X, Video } from "lucide-react";
+import react from "../assets/react.svg";
 
 const ChatHeader = () => {
     const { selectedUser, setSelectedUser } = useMessageStore();
     const { onlineUsers } = useAuthStore();
-    const { startCall } = useVideoCallStore();
-    const navigate = useNavigate();
-    const [isOutgoingCall, setIsOutgoingCall] = useState(false);
+    const { initiateCall } = useVideoCallStore();
 
     if (!selectedUser) return null;
 
     const isOnline = onlineUsers.includes(selectedUser._id);
-    // const { initiateCall } = useVideoCallStore();
-    const { initiateCall } = useVideoCallStore();
-    // const { selectedUser } = useMessageStore();
 
     const handleVideoCall = () => {
-        // FIX: positional args, not object
-        // FIX: removed local OutgoingCallScreen — App.jsx handles it globally
-        initiateCall(
-            "direct",
-            selectedUser._id,
-            null,
-            {
-                _id: selectedUser._id,
-                Fullname: selectedUser.Fullname,
-                profilePic: selectedUser.profilePic,
-            }
-        );
-    };
-    const handleAudioCall = async () => {
-        // For now, same as video call (you can add audio-only later)
-        handleVideoCall();
-    };
-
-    const handleCancelCall = () => {
-        setIsOutgoingCall(false);
+        initiateCall("direct", selectedUser._id, null, {
+            _id: selectedUser._id,
+            Fullname: selectedUser.Fullname,
+            profilePic: selectedUser.profilePic,
+        });
     };
 
     return (
-        <>
-            {/* Outgoing Call Screen Overlay */}
-            {isOutgoingCall && (
-                <OutgoingCallScreen
-                    receiverName={selectedUser.Fullname}
-                    receiverAvatar={selectedUser.profilePic}
-                    onCancel={handleCancelCall}
-                />
-            )}
-
-            <div className="px-6 py-4 bg-[#050208]/80 backdrop-blur-xl border-b border-purple-900/10">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="relative size-10 rounded-full border border-purple-500/20 overflow-hidden bg-zinc-900">
-                            <img
-                                src={selectedUser.profilePic || react}
-                                alt="profile"
-                                className="w-full h-full object-cover"
-                            />
-                            {/* Online Indicator */}
-                            {isOnline && (
-                                <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-[#050208]" />
-                            )}
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-purple-50">
-                                {selectedUser.Fullname}
-                            </h3>
-                            <p className="text-[10px] text-emerald-500 uppercase tracking-widest font-bold">
-                                {isOnline ? 'Online' : 'Offline'}
-                            </p>
-                        </div>
+        <div className="px-5 py-2.5 bg-[#08040d]/40 backdrop-blur-md border-b border-white/[0.05] flex items-center justify-between">
+            {/* User Info Section */}
+            <div className="flex items-center gap-3">
+                <div className="relative">
+                    <div className="size-8 rounded-full border border-purple-500/20 overflow-hidden bg-zinc-900">
+                        <img
+                            src={selectedUser.profilePic || react}
+                            alt="avatar"
+                            className="w-full h-full object-cover"
+                        />
                     </div>
+                    {isOnline && (
+                        <span className="absolute -bottom-0.5 -right-0.5 size-2.5 bg-emerald-500 rounded-full border-2 border-[#08040d]" />
+                    )}
+                </div>
 
-                    {/* Call Buttons */}
-                    <button
-                        onClick={handleVideoCall}
-                        disabled={isOutgoingCall}
-                        className="p-2 rounded-full hover:bg-purple-500/20 bg-purple-500/10 text-purple-400 hover:text-purple-300 transition-all disabled:opacity-50 flex items-center gap-1"
-                        title="Video Call"
-                    >
-                        <Video size={18} />
-                    </button>
-
-                    {/* Audio Call Button */}
-                    <button
-                        onClick={() => initiateCall("group", null, selectedGroup._id, null)}
-                        className="p-2 hover:bg-gray-700 rounded-full transition-colors"
-                        title="Group Video Call"
-                    >
-                        <Video className="w-5 h-5 text-gray-300" />
-                    </button>
-
-                    {/* Close Button */}
-                    <button
-                        onClick={() => setSelectedUser(null)}
-                        className="p-2 hover:bg-white/5 rounded-full text-zinc-500 transition-colors ml-2"
-                    >
-                        <X size={20} />
-                    </button>
+                <div className="flex flex-col">
+                    <h3 className="text-xs font-semibold text-white/90 leading-tight tracking-tight">
+                        {selectedUser.Fullname}
+                    </h3>
+                    <span className={`text-[9px] uppercase tracking-tighter font-bold ${isOnline ? 'text-emerald-500/80' : 'text-white/20'}`}>
+                        {isOnline ? 'Active' : 'Offline'}
+                    </span>
                 </div>
             </div>
 
-        </>
+            {/* Action Section */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={handleVideoCall}
+                    className="p-2 hover:bg-purple-500/10 rounded-lg text-purple-400/80 hover:text-purple-300 transition-all active:scale-95"
+                    title="Start Video Call"
+                >
+                    <Video size={18} strokeWidth={2} />
+                </button>
+
+                <div className="w-[1px] h-4 bg-white/5 mx-1" />
+
+                <button
+                    onClick={() => setSelectedUser(null)}
+                    className="p-2 hover:bg-white/5 rounded-lg text-white/20 hover:text-white/60 transition-colors"
+                >
+                    <X size={18} />
+                </button>
+            </div>
+        </div>
     );
 };
 

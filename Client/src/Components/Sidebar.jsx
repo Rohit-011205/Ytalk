@@ -160,6 +160,7 @@ import { Users, Plus, Phone } from 'lucide-react';
 import react from '../assets/react.svg';
 import CreateGroupModal from './GroupModel.jsx';
 import CallHistoryModal from './CallHistoryModal.jsx';
+import { axiosInstance } from '../../API.js';
 
 const Sidebar = () => {
   const { getUsers, users, selectedUser, setSelectedUser, messages, subscribeToMessages, unsubscribeFromMessages } = useMessageStore();
@@ -170,8 +171,15 @@ const Sidebar = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCallHistory, setShowCallHistory] = useState(false);
 
-  // Track unread counts and last message per user
-  const [userMeta, setUserMeta] = useState({}); 
+
+  const [userMeta, setUserMeta] = useState(() => {
+    try {
+      const saved = localStorage.getItem('userMeta')
+      return saved ? JSON.parse(saved) : {}
+    } catch (error) {
+      return {}
+    }
+  });
   // userMeta[userId] = { unread: number, lastMessage: string, lastTime: Date }
 
   useEffect(() => {
@@ -181,7 +189,39 @@ const Sidebar = () => {
   }, []);
 
   // Subscribe to incoming messages globally to update sidebar badges
+
+  useEffect( () => {
+    if (users.length === 0)
+      return
+
+    const loadLastMessage = async () => {
+      try {
+        const res = await axiosInstance.get('/messages/last-messages')
+
+        // const data = await res.json()
+
+        setUserMeta(prev => {
+          const updated = { ...prev }
+
+          res.data.forEach(item => {
+            updated[item.userId] = {
+              unread: item.unread || 0,
+              lastMessage: item.lastMessage || '',
+              lastTime: new Date(item.lastTime),
+            };
+          })
+          return updated
+        })
+      } catch (error) {
+        console.log("Error in useEffect Sidebar:", error.message)
+      }
+    }
+    loadLastMessage()
+
+  }, [users])
+
   useEffect(() => {
+
     const handleNewMessage = (message) => {
       const currentSelectedUser = useMessageStore.getState().selectedUser;
       const senderId = message.senderId;
@@ -192,7 +232,7 @@ const Sidebar = () => {
           ...prev,
           [senderId]: {
             unread: (prev[senderId]?.unread || 0) + 1,
-            lastMessage: message.text || (message.image ? '📷 Photo' : ''),
+            lastMessage: message.text || (message.image ? ' Photo' : ''),
             lastTime: new Date(message.createdAt || Date.now()),
           }
         }));
@@ -202,12 +242,15 @@ const Sidebar = () => {
           ...prev,
           [senderId]: {
             unread: 0,
-            lastMessage: message.text || (message.image ? '📷 Photo' : ''),
+            lastMessage: message.text || (message.image ? ' Photo' : ''),
             lastTime: new Date(message.createdAt || Date.now()),
           }
         }));
       }
     };
+
+
+
 
     // Subscribe using socket from the store
     const { socket } = useAuthStore.getState();
@@ -221,6 +264,31 @@ const Sidebar = () => {
       }
     };
   }, []);
+  useEffect(() => {
+    localStorage.setItem('userMeta', JSON.stringify(userMeta))
+  }, [userMeta])
+
+  useEffect(() => {
+    if (!selectedUser || messages.length === 0) {
+      return;
+    }
+
+    const lastmsg = messages[messages.length - 1];
+
+    setUserMeta(prev => ({
+      ...prev,
+      [selectedUser._id]: {
+        unread: 0,
+        lastMessage: lastmsg.text || (lastmsg.image ? 'Photo' : ""),
+        lastTime: new Date(lastmsg.createdAt || Date.now()),
+
+      }
+    }))
+  }, [messages])
+
+  useEffect(() => {
+    localStorage.setItem('userMeta', JSON.stringify(userMeta))
+  }, [userMeta])
 
   // Clear unread when a user is selected
   const handleSelectUser = (user) => {
@@ -237,8 +305,8 @@ const Sidebar = () => {
   // Sort users: those with recent messages come first, then rest alphabetically
   const sortedUsers = useMemo(() => {
     return [...users].sort((a, b) => {
-      const timeA = userMeta[a._id]?.lastTime || new Date(0);
-      const timeB = userMeta[b._id]?.lastTime || new Date(0);
+      const timeA = new Date(userMeta[a._id]?.lastTime || 0);
+      const timeB = new Date(userMeta[b._id]?.lastTime || 0);
       return timeB - timeA; // Most recent first
     });
   }, [users, userMeta]);
@@ -251,6 +319,8 @@ const Sidebar = () => {
   // Format last message time
   const formatTime = (date) => {
     if (!date) return '';
+
+    const dateformat = new Date(date)
     const now = new Date();
     const diff = now - date;
     const minutes = Math.floor(diff / 60000);
@@ -261,7 +331,7 @@ const Sidebar = () => {
     if (minutes < 60) return `${minutes}m`;
     if (hours < 24) return `${hours}h`;
     if (days < 7) return `${days}d`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return dateformat.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
   return (

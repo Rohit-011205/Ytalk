@@ -117,36 +117,55 @@ export const sendMessage = async (req, res) => {
         }
 
         // ✅ DOGESH BHAI TRIGGER
-        if (text && /@dogeshbhai\b/i.test(text)) {
+
+        const isPersonalAIChat = receiverId.toString() === process.env.AI_AGENT_ID
+
+        const isOtherChat = text && /@dogeshbhai\b/i.test(text)
+
+        if (isPersonalAIChat || isOtherChat) {
+
+            if (senderId.toString() === process.env.AI_AGENT_ID) {
+                return res.status(201).json(newMessage)
+            }
+
             console.log("🐕 Dogesh Bhai activated!");
-            
+
             // Clean prompt (remove @dogeshbhai)
-            const cleanText = text.replace(/@dogeshbhai\b/gi, '').trim();
+            const cleanText = isOtherChat ? text.replace(/@dogeshbhai\b/gi, '').trim() : text;
             if (cleanText) {
                 // Get context
                 const context = await getConversationContext(senderId, receiverId);
-                
+
                 // Generate Dogesh response
-                const aiResponseText = await generateAiResponse(cleanText);
+                const aiResponseText = await generateAiResponse(cleanText, context);
+
 
                 // Save Dogesh message
                 const dogeshMessage = new Message({
                     senderId: process.env.AI_AGENT_ID,
-                    receiverId: senderId.toString(), // Dogesh replies to sender
+                    receiverId: isPersonalAIChat? senderId.toString() : receiverId.toString(),
                     text: aiResponseText,
-                    isAiResponse: true // Add this field to your Message model if not already
+                    isAiResponse: true 
                 });
                 await dogeshMessage.save();
 
                 // Emit to sender (main recipient)
                 const senderSocketId = getReceiverSocketId(senderId.toString());
-                if (senderSocketId) {
-                    io.to(senderSocketId).emit("newMessage", dogeshMessage);
-                }
-                
-                // Also emit to receiver if they're in chat
-                if (receiverSocketId) {
-                    io.to(receiverSocketId).emit("newMessage", dogeshMessage);
+                if (isPersonalAIChat) {
+                    // Personal chat: only sender needs to see the reply
+                    if (senderSocketId) {
+                        io.to(senderSocketId).emit("newMessage", dogeshMessage);
+                    }
+                } else {
+                    // Other chat: both people in that chat see Dogesh's reply
+                    if (senderSocketId) {
+                        io.to(senderSocketId).emit("newMessage", dogeshMessage);
+                    }
+                    if (receiverSocketId) {
+                        io.to(receiverSocketId).emit("newMessage", dogeshMessage);
+                    }
+                    //  io.to(senderId).emit("newMessage", dogeshMessage);
+                    //   io.to(receiverSocketId).emit("newMessage", dogeshMessage);
                 }
 
                 console.log("🐕 Dogesh replied:", aiResponseText.substring(0, 50) + "...");
@@ -155,9 +174,53 @@ export const sendMessage = async (req, res) => {
 
         res.status(201).json(newMessage);
     } catch (error) {
-            console.log("Error in sendMessage controller: ", error.message);
-            res.status(500).json({ error: "Internal server error" });
-        }
-
-
+        console.log("Error in sendMessage controller: ", error.message);
+        res.status(500).json({ error: "Internal server error" });
     }
+}
+
+export const getLastMessages = async (req, res) => {
+    try {
+        const myId = req.user._id;
+
+        // Get all users except me
+        const users = await User.find({ _id: { $ne: myId } }).select("_id");
+
+        const lastMessages = await Promise.all(
+            users.map(async (user) => {
+                // Get the last message between me and this user
+                const lastMsg = await Message.findOne({
+                    $or: [
+                        { senderId: myId, receiverId: user._id },
+                        { senderId: user._id, receiverId: myId },
+                    ]
+                }).sort({ createdAt: -1 }); // newest first
+
+                // Count unread messages (they sent, I haven't read)
+                const unreadCount = await Message.countDocuments({
+                    senderId: user._id,
+                    receiverId: myId,
+                    read: false // only if you have a read field
+                });
+
+                if (!lastMsg) return null; // no conversation yet
+
+                return {
+                    userId: user._id,
+                    lastMessage: lastMsg.text || (lastMsg.image ? '📷 Photo' : ''),
+                    lastTime: lastMsg.createdAt,
+                    unread: unreadCount,
+                };
+            })
+        );
+
+        // Remove nulls (users with no messages)
+        const filtered = lastMessages.filter(Boolean);
+
+        res.status(200).json(filtered);
+
+    } catch (error) {
+        console.error("Error in getLastMessages: ", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+}

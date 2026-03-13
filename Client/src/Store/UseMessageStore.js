@@ -66,26 +66,44 @@ export const useMessageStore = create((set, get) => ({
         }
     },
 
-    subscribeToMessages: () =>{
-      const {selectedUser, messages} = get();
-      if(!selectedUser) return;
+    subscribeToMessages: () => {
+        const { selectedUser, messages } = get();
+        if (!selectedUser) return;
 
-      const socket = useAuthStore.getState().socket;
+        const socket = useAuthStore.getState().socket;
 
-      socket.on("newMessage", (newMessage) => {
-       
-        // const
-     if(newMessage.senderId !== selectedUser._id) return;
-        set((state) => ({
-            messages: [...state.messages, newMessage],
-        }));
-        
-      })
+        socket.off("newMessage")
+
+        const myId = useAuthStore.getState().authUser._id.toString();
+        const AI_ID = import.meta.env.VITE_AI_AGENT_ID;
+        const selectedUserId = selectedUser._id.toString();
+
+
+        socket.on("newMessage", (newMessage) => {
+            const senderId = newMessage.senderId?.toString();
+            const receiverId = newMessage.receiverId?.toString();
+
+            // Normal message from selected user to me
+            const fromSelectedUser = senderId === selectedUserId && receiverId === myId;
+
+            // ✅ AI reply — use isAiResponse flag, no AI_ID needed
+            // receiverId can be myId (when I'm receiver) OR selectedUserId (when I'm sender)
+            const isAIReply = newMessage.isAiResponse === true &&
+                (receiverId === myId || receiverId === selectedUserId);
+
+                console.log("isAiResponse:", newMessage.isAiResponse, "| receiverId:", receiverId, "| myId:", myId, "| selectedUserId:", selectedUserId, "| isAIReply:", isAIReply);
+
+            if (!fromSelectedUser && !isAIReply) return;
+
+            set((state) => ({
+                messages: [...state.messages, newMessage],
+            }));
+        });
     },
 
-    
 
-    unsubscribeFromMessages: () =>{
+
+    unsubscribeFromMessages: () => {
         const socket = useAuthStore.getState().socket;
         socket.off("newMessage");
     },

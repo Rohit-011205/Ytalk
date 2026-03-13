@@ -4,6 +4,7 @@ import cloudinary from "../lib/cloudinary.js"
 import { getReceiverSocketId } from "../lib/socket.io.js"
 import { io } from "../lib/socket.io.js"
 import { getConversationContext, generateAiResponse } from "./Aicontroller.js"
+import { emitToUser } from "../lib/socket.io.js"
 
 
 export const getUserForSidebar = async (req, res) => {
@@ -24,14 +25,46 @@ export const getMessages = async (req, res) => {
     try {
         const { id: userToChatId } = req.params
         const myId = req.user._id
+        const AI_ID = process.env.AI_AGENT_ID
 
-        const messages = await Message.find({
-            $or: [
-                { senderId: myId, receiverId: userToChatId },
-                { receiverId: myId, senderId: userToChatId },
+        const orConditions = [
+            // Normal messages
+            { senderId: myId, receiverId: userToChatId },
+            { senderId: userToChatId, receiverId: myId },
+        ];
 
-            ],
-        })
+        if (AI_ID) {
+            orConditions.push(
+                // ✅ All AI messages always have receiverId = myId now
+                // Works for personal chat AND @dogeshbhai in friend's chat
+                { senderId: myId, receiverId: AI_ID },
+                { senderId: AI_ID, receiverId: myId, isAiResponse: true },
+            );
+        }
+
+        const messages = await Message.find({ $or: orConditions })
+            .sort({ createdAt: 1 });
+
+
+
+        // const orConditions = [
+        //     { senderId: myId, receiverId: userToChatId },
+        //     { senderId: userToChatId, receiverId: myId },
+        // ];
+
+        // if (AI_ID) {
+        //     orConditions.push(
+        //         // Personal AI chat replies
+        //         { senderId: AI_ID, receiverId: myId, isAiResponse: true },
+        //         // ✅ Key fix: also fetch AI replies where receiverId is the other person
+        //         // (when @dogeshbhai is triggered in someone else's chat)
+        //         { senderId: AI_ID, receiverId: userToChatId, isAiResponse: true },
+        //     );
+        // }
+
+        // const messages = await Message.find({ $or: orConditions })
+        //     .sort({ createdAt: 1 });
+
         res.status(200).json(messages)
 
 
@@ -41,54 +74,6 @@ export const getMessages = async (req, res) => {
     }
 }
 
-// export const sendMessage = async (req, res) => {
-//     try {
-//         const { text, image } = req.body;
-//         const { id: receiverId } = req.params
-
-//         const senderId = req.user._id
-
-//         let imageUrl;
-//         if (image) {
-//             const uploadRespone = await cloudinary.uploader.upload(image);
-//             imageUrl = uploadRespone.secure_url
-//         }
-
-//         const newMessage = new Message({
-//             senderId,
-//             receiverId,
-//             text,
-//             image: imageUrl,
-//         });
-
-//         await newMessage.save();
-
-//         const receiverSocketId = getReceiverSocketId(receiverId);
-//         if (receiverSocketId) {
-//             io.to(receiverSocketId).emit("newMessage", newMessage);
-//         }
-
-//         if (text && /@dogeshbhai\b/i.test(text)) {
-//             const cleanText = text.replace(/@dogeshbhai\b/gi, '').trim();
-//             const context = await getConversationContext(senderId, receiverId);
-//             const aiResponseText = await generateAiResponse(cleanText, context);
-
-//             const aiMessage = new Message({
-//                 senderId: process.env.AI_AGENT_ID, // Ensure this is in your .env
-//                 receiverId: senderId, // Dogesh replies back to the sender
-//                 text: aiResponseText,
-//             });
-
-//             await aiMessage.save();
-
-//             const senderSocketId = getReceiverSocketId(senderId);
-
-//             if (senderSocketId) io.to(senderSocketId).emit("newMessage", aiMessage);
-//             if (receiverSocketId) io.to(receiverSocketId).emit("newMessage", aiMessage);
-
-//         }
-//             res.status(201).json(newMessage);
-//         }
 export const sendMessage = async (req, res) => {
     try {
         const { text, image } = req.body;
@@ -111,64 +96,57 @@ export const sendMessage = async (req, res) => {
         await newMessage.save();
 
         // Emit to receiver
-        const receiverSocketId = getReceiverSocketId(receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("newMessage", newMessage);
-        }
+        emitToUser(receiverId.toString(), "newMessage", newMessage);
+        emitToUser(senderId.toString(), "newMessage", newMessage);
 
-        // ✅ DOGESH BHAI TRIGGER
-
-        const isPersonalAIChat = receiverId.toString() === process.env.AI_AGENT_ID
-
-        const isOtherChat = text && /@dogeshbhai\b/i.test(text)
+        const isPersonalAIChat = receiverId.toString() === process.env.AI_AGENT_ID;
+        const isOtherChat = text && /@dogeshbhai\b/i.test(text);
 
         if (isPersonalAIChat || isOtherChat) {
-
             if (senderId.toString() === process.env.AI_AGENT_ID) {
-                return res.status(201).json(newMessage)
+                return res.status(201).json(newMessage);
             }
 
-            console.log("🐕 Dogesh Bhai activated!");
+            const cleanText = isOtherChat
+                ? text.replace(/@dogeshbhai\b/gi, '').trim()
+                : text;
 
-            // Clean prompt (remove @dogeshbhai)
-            const cleanText = isOtherChat ? text.replace(/@dogeshbhai\b/gi, '').trim() : text;
             if (cleanText) {
-                // Get context
                 const context = await getConversationContext(senderId, receiverId);
-
-                // Generate Dogesh response
                 const aiResponseText = await generateAiResponse(cleanText, context);
 
-
-                // Save Dogesh message
-                const dogeshMessage = new Message({
-                    senderId: process.env.AI_AGENT_ID,
-                    receiverId: isPersonalAIChat? senderId.toString() : receiverId.toString(),
-                    text: aiResponseText,
-                    isAiResponse: true 
-                });
-                await dogeshMessage.save();
-
-                // Emit to sender (main recipient)
-                const senderSocketId = getReceiverSocketId(senderId.toString());
                 if (isPersonalAIChat) {
-                    // Personal chat: only sender needs to see the reply
-                    if (senderSocketId) {
-                        io.to(senderSocketId).emit("newMessage", dogeshMessage);
-                    }
-                } else {
-                    // Other chat: both people in that chat see Dogesh's reply
-                    if (senderSocketId) {
-                        io.to(senderSocketId).emit("newMessage", dogeshMessage);
-                    }
-                    if (receiverSocketId) {
-                        io.to(receiverSocketId).emit("newMessage", dogeshMessage);
-                    }
-                    //  io.to(senderId).emit("newMessage", dogeshMessage);
-                    //   io.to(receiverSocketId).emit("newMessage", dogeshMessage);
-                }
+                    // Personal chat: one message, receiver = sender
+                    const dogeshMessage = new Message({
+                        senderId: process.env.AI_AGENT_ID,
+                        receiverId: senderId.toString(),
+                        text: aiResponseText,
+                        isAiResponse: true,
+                    });
+                    await dogeshMessage.save();
+                    emitToUser(senderId.toString(), "newMessage", dogeshMessage);
 
-                console.log("🐕 Dogesh replied:", aiResponseText.substring(0, 50) + "...");
+                } else {
+                    // ✅ Friend chat: save TWO messages so both A and B can fetch on reload
+                    const dogeshForA = new Message({
+                        senderId: process.env.AI_AGENT_ID,
+                        receiverId: senderId.toString(),   // A gets their own copy
+                        text: aiResponseText,
+                        isAiResponse: true,
+                    });
+                    await dogeshForA.save();
+
+                    const dogeshForB = new Message({
+                        senderId: process.env.AI_AGENT_ID,
+                        receiverId: receiverId.toString(), // B gets their own copy
+                        text: aiResponseText,
+                        isAiResponse: true,
+                    });
+                    await dogeshForB.save();
+
+                    emitToUser(senderId.toString(), "newMessage", dogeshForA);
+                    emitToUser(receiverId.toString(), "newMessage", dogeshForB);
+                }
             }
         }
 
@@ -200,10 +178,10 @@ export const getLastMessages = async (req, res) => {
                 const unreadCount = await Message.countDocuments({
                     senderId: user._id,
                     receiverId: myId,
-                    read: false // only if you have a read field
+                    read: false 
                 });
 
-                if (!lastMsg) return null; // no conversation yet
+                if (!lastMsg) return null;
 
                 return {
                     userId: user._id,

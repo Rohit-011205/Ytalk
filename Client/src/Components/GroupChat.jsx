@@ -1,83 +1,10 @@
-// import React, { useEffect } from "react";
-// import { useGroupStore } from "../Store/useGroupStore.js";
-
-// const GroupChat = () => {
-//     const {
-//         activeGroup,
-//         groupMessages,
-//         fetchGroupMessages,
-//         sendGroupMessage
-//     } = useGroupStore();
-
-//     useEffect(() => {
-//         if (activeGroup?._id) {
-//             fetchGroupMessages(activeGroup._id);
-//         }
-//     }, [activeGroup]);
-
-//     if (!activeGroup) return null;
-
-//     return (
-//         <div className="flex flex-col h-full">
-
-//             {/* HEADER */}
-//             <div className="border-b border-white/10 px-4 py-3">
-//                 <h2 className="text-white font-semibold">
-//                     {activeGroup.name}
-//                 </h2>
-//                 <p className="text-xs text-zinc-400">
-//                     {activeGroup.members.length} members
-//                 </p>
-//             </div>
-
-//             {/* MESSAGES */}
-//             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-//                 {groupMessages.length === 0 && (
-//                     <p className="text-zinc-500 text-sm">
-//                         No messages yet
-//                     </p>
-//                 )}
-
-//                 {groupMessages.map((msg) => (
-//                     <div key={msg._id} className="text-white text-sm">
-//                         <span className="font-semibold mr-1">
-//                             {msg.senderId?.Fullname}:
-//                         </span>
-//                         {msg.text}
-//                     </div>
-//                 ))}
-//             </div>
-
-//             {/* INPUT (basic for now) */}
-//             <div className="border-t border-white/10 p-3">
-//                 <form
-//                     onSubmit={(e) => {
-//                         e.preventDefault();
-//                         const text = e.target.message.value;
-//                         if (!text.trim()) return;
-//                         sendGroupMessage(activeGroup._id, text);
-//                         e.target.reset();
-//                     }}
-//                 >
-//                     <input
-//                         name="message"
-//                         placeholder="Message group..."
-//                         className="w-full bg-transparent border border-white/10 rounded px-3 py-2 text-white outline-none"
-//                     />
-//                 </form>
-//             </div>
-//         </div>
-//     );
-// };
-
-// export default GroupChat;
-
-
-
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react"; // 1. Added useState
 import { useGroupStore } from "../Store/useGroupStore.js";
 import { useAuthStore } from "../Store/useAuthStore.js";
-import reactLogo from "../assets/react.svg"; // Fallback avatar
+import { useVideoCallStore } from "../Store/useVideoCall.js";
+import reactLogo from "../assets/react.svg";
+import { Video, Info } from "lucide-react"; // 2. Added Info icon
+import GroupSettingModal from "./GroupSettingModal"; // 3. Import the modal
 
 const GroupChat = () => {
     const {
@@ -91,18 +18,37 @@ const GroupChat = () => {
 
     const { authUser } = useAuthStore();
     const bottomRef = useRef(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false); // 4. Modal state
 
-    // Fetch messages on group change
+    const { initiateCall, activeCall } = useVideoCallStore();
+
+    const handleGroupVideoCall = () => {
+        if (!activeGroup?._id) return;
+        initiateCall("group", null, activeGroup._id, {
+            _id: activeGroup._id,
+            Fullname: activeGroup.name,
+            profilePic: null,
+            isGroup: true,
+            memberCount: activeGroup.members?.length,
+        });
+    };
+
     useEffect(() => {
         if (activeGroup?._id) {
             fetchGroupMessages(activeGroup._id);
         }
     }, [activeGroup, fetchGroupMessages]);
 
-    // Auto-scroll to bottom
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [groupMessages]);
+
+    useEffect(() => {
+        subscribeToGroupMessages();
+        return () => {
+            unsubscribeFromGroupMessages();
+        };
+    }, [activeGroup]);
 
     if (!activeGroup) {
         return (
@@ -112,8 +58,6 @@ const GroupChat = () => {
         );
     }
 
-
-
     const handleSendMessage = (e) => {
         e.preventDefault();
         const text = e.target.message.value;
@@ -121,15 +65,6 @@ const GroupChat = () => {
         sendGroupMessage(activeGroup._id, text);
         e.target.reset();
     };
-
-    useEffect(() => {
-        subscribeToGroupMessages();
-
-        return () => {
-            unsubscribeFromGroupMessages();
-        };
-    }, [activeGroup]);
-
 
     return (
         <div className="flex flex-1 flex-col h-full overflow-hidden bg-[#050208]">
@@ -147,6 +82,31 @@ const GroupChat = () => {
                             {activeGroup.members?.length || 0} Members
                         </p>
                     </div>
+
+                    {/* Header Actions Container */}
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            onClick={handleGroupVideoCall}
+                            disabled={!!activeCall}
+                            title={activeCall ? "Already in a call" : "Start group video call"}
+                            className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 
+                                       border border-purple-500/20 text-purple-400 
+                                       hover:text-purple-300 transition-all
+                                       disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <Video className="size-5" />
+                        </button>
+
+                        {/* 5. SETTINGS TRIGGER BUTTON */}
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 
+                                       border border-white/10 text-zinc-400 
+                                       hover:text-white transition-all"
+                        >
+                            <Info className="size-5" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -162,8 +122,6 @@ const GroupChat = () => {
                         return (
                             <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                                 <div className={`flex gap-3 max-w-[85%] lg:max-w-[500px] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-
-                                    {/* Avatar */}
                                     <div className="flex-shrink-0">
                                         <img
                                             src={msg.senderId?.profilePic || reactLogo}
@@ -171,16 +129,12 @@ const GroupChat = () => {
                                             className="size-8 rounded-full border border-white/10 object-cover"
                                         />
                                     </div>
-
                                     <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                                        {/* Sender Name (Only show for others) */}
                                         {!isMe && (
                                             <span className="text-[11px] font-medium text-purple-400 mb-1 ml-1">
                                                 {msg.senderId?.Fullname || "Unknown User"}
                                             </span>
                                         )}
-
-                                        {/* Message Bubble */}
                                         <div className={`px-4 py-2 rounded-2xl text-[14px] leading-relaxed shadow-sm
                                             ${isMe
                                                 ? "bg-purple-600 text-white rounded-tr-none"
@@ -189,8 +143,6 @@ const GroupChat = () => {
                                         >
                                             {msg.text}
                                         </div>
-
-                                        {/* Timestamp */}
                                         <span className="mt-1 text-[9px] text-zinc-600 uppercase tracking-widest font-medium">
                                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
@@ -221,6 +173,12 @@ const GroupChat = () => {
                     </button>
                 </form>
             </div>
+
+            {/* 6. RENDER THE SETTINGS MODAL */}
+            <GroupSettingModal 
+                isOpen={isSettingsOpen} 
+                onClose={() => setIsSettingsOpen(false)} 
+            />
         </div>
     );
 };

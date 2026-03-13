@@ -80,6 +80,9 @@ export const useMessageStore = create((set, get) => ({
 
 
         socket.on("newMessage", (newMessage) => {
+            const currentSelectedUser = get().selectedUser;
+            if (!currentSelectedUser) return;
+
             const senderId = newMessage.senderId?.toString();
             const receiverId = newMessage.receiverId?.toString();
 
@@ -89,11 +92,17 @@ export const useMessageStore = create((set, get) => ({
             // ✅ AI reply — use isAiResponse flag, no AI_ID needed
             // receiverId can be myId (when I'm receiver) OR selectedUserId (when I'm sender)
             const isAIReply = newMessage.isAiResponse === true &&
-                (receiverId === myId || receiverId === selectedUserId);
+                (
+                    (senderId === AI_ID && receiverId === myId) ||
+                    (senderId === AI_ID && receiverId === selectedUserId)
+                );
 
-                console.log("isAiResponse:", newMessage.isAiResponse, "| receiverId:", receiverId, "| myId:", myId, "| selectedUserId:", selectedUserId, "| isAIReply:", isAIReply);
+            console.log("isAiResponse:", newMessage.isAiResponse, "| receiverId:", receiverId, "| myId:", myId, "| selectedUserId:", selectedUserId, "| isAIReply:", isAIReply);
 
             if (!fromSelectedUser && !isAIReply) return;
+
+            const currentMessages = get().messages;
+            if (currentMessages.find(m => m._id === newMessage._id)) return;
 
             set((state) => ({
                 messages: [...state.messages, newMessage],

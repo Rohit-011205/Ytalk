@@ -1,6 +1,7 @@
 import React from "react";
 import { useEffect, useState } from "react";
 import { useGroupStore } from "../Store/useGroupStore";
+import GroupSettingsModal from "./GroupSettingModal";
 
 const CreateGroupModal = ({ isOpen, onClose }) => {
   const [groupName, setGroupName] = useState("");

@@ -30,6 +30,10 @@ const messageSchema = new mongoose.Schema(
                 return !this.receiverId; // required only for group chats
             }
         },
+        chatId: {
+            type: String,
+            default: null,
+        },
 
         text: {
             type: String,

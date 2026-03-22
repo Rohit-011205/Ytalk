@@ -1,4 +1,4 @@
-import { AccessToken,TrackSource } from "livekit-server-sdk";
+import { AccessToken, TrackSource } from "livekit-server-sdk";
 import VideoCall from "../Models/video-call.model.js";
 import { v4 as uuidv4 } from "uuid";
 import Group from "../Models/group.model.js";
@@ -17,8 +17,8 @@ const generateLiveKitToken = async (roomName, participant, identity) => {
         canSubscribe: true,
         canPublishData: true,
         canUpdateOwnMetadata: true,
-    //    canPublishSources: ["camera", "microphone", "screen_share"],
-    // canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE],
+        //    canPublishSources: ["camera", "microphone", "screen_share"],
+        // canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE],
     })
 
     return await at.toJwt();
@@ -348,8 +348,9 @@ export const getCallHistory = async (req, res) => {
         // Tag each call with direction from this user's perspective
         const result = calls.map((call) => {
             const obj = call.toObject();
-            const isCaller = call.initiatedBy._id.toString() === userId.toString();
+            const isCaller = call.initiatedBy?._id?.toString() === userId.toString();
             obj.direction = isCaller ? "outgoing" : "incoming";
+
             return obj;
         });
 
@@ -359,4 +360,4 @@ export const getCallHistory = async (req, res) => {
         console.error("Error in getCallHistory controller:", error.message);
         res.status(500).json({ message: "Internal server error" });
     }
-};
+};  

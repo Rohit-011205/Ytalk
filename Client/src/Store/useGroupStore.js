@@ -26,6 +26,10 @@ export const useGroupStore = create((set, get) => ({
 
 
     setActiveGroup: async (groupId) => {
+        if (!groupId) {
+            set({ activeGroup: null, groupMessages: [] });
+            return;
+        }
         const socket = useAuthStore.getState().socket;
         const prevGroup = get().activeGroup;
         useMessageStore.getState().setSelectedUser(null);
@@ -163,40 +167,40 @@ export const useGroupStore = create((set, get) => ({
 
     // Add/Update these methods in your useGroupStore.js
 
-addMembers: async (groupId, userId) => { // Backend expects single userId in body
-    try {
-        const res = await axiosInstance.post(`/groups/${groupId}/add-member`, { userId });
-        set({ activeGroup: res.data }); 
-        toast.success("Member added to the group");
-    } catch (error) {
-        toast.error(error.response?.data?.message || "Failed to add member");
-    }
-},
+    addMembers: async (groupId, userId) => { // Backend expects single userId in body
+        try {
+            const res = await axiosInstance.post(`/groups/${groupId}/add-member`, { userId });
+            set({ activeGroup: res.data });
+            toast.success("Member added to the group");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to add member");
+        }
+    },
 
-removeMember: async (groupId, userId) => {
-    try {
-        const res = await axiosInstance.post(`/groups/${groupId}/remove-member`, { userId });
-        set({ activeGroup: res.data });
-        toast.success("Member removed");
-    } catch (error) {
-        toast.error(error.response?.data?.message || "Failed to remove member");
-    }
-},
+    removeMember: async (groupId, userId) => {
+        try {
+            const res = await axiosInstance.post(`/groups/${groupId}/remove-member`, { userId });
+            set({ activeGroup: res.data });
+            toast.success("Member removed");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to remove member");
+        }
+    },
 
-// Logic for the creator/admin to delete the group
-// deleteGroup: async (groupId) => {
-//     try {
-//         await axiosInstance.delete(`/groups/${groupId}/delete`);
-//         set((state) => ({
-//             groups: state.groups.filter((g) => g._id !== groupId),
-//             activeGroup: null,
-//             groupMessages: [],
-//         }));
-//         toast.success("Group deleted forever");
-//     } catch (error) {
-//         toast.error("Failed to delete group");
-//     }
-// }
+    // Logic for the creator/admin to delete the group
+    // deleteGroup: async (groupId) => {
+    //     try {
+    //         await axiosInstance.delete(`/groups/${groupId}/delete`);
+    //         set((state) => ({
+    //             groups: state.groups.filter((g) => g._id !== groupId),
+    //             activeGroup: null,
+    //             groupMessages: [],
+    //         }));
+    //         toast.success("Group deleted forever");
+    //     } catch (error) {
+    //         toast.error("Failed to delete group");
+    //     }
+    // }
 
     updateGroup: async (groupId, updateData) => {
         try {

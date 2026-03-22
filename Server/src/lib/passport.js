@@ -1,6 +1,7 @@
 import passport from 'passport';
 import User from '../Models/user.model.js';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import cloudinary from './cloudinary.js';
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,

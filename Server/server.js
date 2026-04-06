@@ -8,6 +8,7 @@ import cors from "cors"
 import { app, server } from "./src/lib/socket.io.js"
 import groupRoutes from "./src/Routes/group.routes.js"
 import videoCallRoutes from './src/Routes/videoCall.route.js';
+import session from "express-session";
 // import passport from "passport";
 import passport from "./src/lib/passport.js";
 // import { createWorkers } from "./src/lib/mediasoupConfig.js";
@@ -22,12 +23,14 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:5173"
 ];
+
+app.use(passport.initialize());
+
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
 }
 ))
-
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
 
@@ -35,7 +38,6 @@ app.use(express.json());
 app.use(cookieParser());
 
 
-app.use(passport.initialize());
 
 app.use("/api/auth", authRoutes)
 app.use("/api/messages", messageRoutes)

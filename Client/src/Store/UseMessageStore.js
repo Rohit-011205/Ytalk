@@ -59,7 +59,11 @@ export const useMessageStore = create((set, get) => ({
             // console.log("sendMessage response:", res.data);
 
             // set({ messages: [...messages, res.data] });
-            await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+
+            set({
+                messages: [...messages, res.data],
+            });
 
         } catch (error) {
             const errorMessage =
@@ -115,12 +119,19 @@ export const useMessageStore = create((set, get) => ({
                 senderId === AI_ID &&
                 newMessage.chatId === expectedChatId;
 
-            // console.log("isAiResponse:", newMessage.isAiResponse, "| receiverId:", receiverId, "| myId:", myId, "| selectedUserId:", selectedUserId, "| isAIReply:", isAIReply);
 
-            if (!fromSelectedUser && !isPersonalAIReply && !isFriendChatAIReply) return;
+
+            // if (!fromSelectedUser && !isPersonalAIReply && !isFriendChatAIReply) return;
 
             const currentMessages = get().messages;
             if (currentMessages.find(m => m._id === newMessage._id)) return;
+
+            const isRelevant =
+                (senderId === selectedUserId && receiverId === myId) ||   // other → me
+                (senderId === myId && receiverId === selectedUserId) ||   // me → other
+                (newMessage.chatId === expectedChatId);
+
+            if (!isRelevant) return;
 
             set((state) => ({
                 messages: [...state.messages, newMessage],

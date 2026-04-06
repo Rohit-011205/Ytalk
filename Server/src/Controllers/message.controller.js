@@ -111,6 +111,7 @@ export const sendMessage = async (req, res) => {
                     const dogeshMessage = new Message({
                         senderId: process.env.AI_AGENT_ID,
                         receiverId: senderId.toString(),
+                        chatId: getChatId(senderId, process.env.AI_AGENT_ID),
                         text: aiResponseText,
                         isAiResponse: true,
                     });
